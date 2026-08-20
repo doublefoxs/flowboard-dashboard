@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opeyemi's FlowBoard Analytic Machine</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #3b82f6;
+            --accent: #0284c7;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; min-height: 100vh; }
+        .container { max-width: 1280px; margin: 0 auto; }
+
+        /* ========================================== */
+        /* DASHBOARD STYLES */
+        /* ========================================== */
+        header { margin-bottom: 24px; border-bottom: 2px solid var(--border); padding-bottom: 16px; }
+        h1 { color: var(--primary); font-size: 1.8rem; margin-bottom: 4px; }
+        p.subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+        .dropzone {
+            background: var(--card-bg);
+            border: 2px dashed var(--primary-light);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+            margin-bottom: 24px;
+        }
+        .dropzone:hover { background: #eff6ff; border-color: var(--primary); }
+        .dropzone input { display: none; }
+        .dropzone-title { font-size: 1.1rem; font-weight: 600; color: var(--primary); margin-bottom: 8px; }
+        .dropzone-hint { font-size: 0.85rem; color: var(--text-muted); }
+
+        .dashboard { display: none; }
+        
+        .filter-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .filter-title { font-weight: 700; color: var(--primary); font-size: 1rem; margin-bottom: 12px; }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            align-items: end;
+        }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: #ffffff;
+            font-size: 0.88rem;
+            color: var(--text);
+            outline: none;
+            cursor: pointer;
+        }
+        .filter-group select:focus { border-color: var(--primary-light); }
+        .btn-reset {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+        }
+        .btn-reset:hover { background: #e2e8f0; }
+
+        .grid-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .kpi-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .kpi-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+        .kpi-val { font-size: 1.6rem; font-weight: 700; color: var(--primary); }
+        .kpi-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+
+        .section-title { font-size: 1.2rem; font-weight: 700; color: var(--primary); margin: 28px 0 12px; border-left: 4px solid var(--primary-light); padding-left: 10px; }
+
+        table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px; font-size: 0.88rem; }
+        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: #f1f5f9; font-weight: 600; color: #334155; }
+        tr:hover { background: #f8fafc; }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+        .badge-warn { background: #fef3c7; color: #92400e; }
+        .badge-info { background: #e0f2fe; color: #075985; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+
+        .qa-box { background: #fefce8; border: 1px solid #fef08a; padding: 16px; border-radius: 8px; margin-bottom: 24px; font-size: 0.88rem; color: #713f12; }
+    </style>
+</head>
+<body>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <div class="container">
+        <header>
+            <h1>Opeyemi's FlowBoard Analytic Machine</h1>
+            <p class="subtitle">Specialty-aware provider attribution (Family Medicine requeuing vs. single specialist), non-provider proxy exclusion, batch-cleanup correction, and interactive filtering</p>
+        </header>
+
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('csvInput').click()">
+            <div class="dropzone-title">📁 Upload or Drag & Drop FlowBoard CSV Export</div>
+            <div class="dropzone-hint">Supports raw FlowBoard exports with encounter sub-rows</div>
+            <input type="file" id="csvInput" accept=".csv" onchange="handleFileSelect(event)">
+        </div>
+
+        <div class="dashboard" id="dashboard">
+            <div class="filter-card">
+                <div class="filter-title">🔍 Dynamic Dashboard Filters</div>
+                <div class="filter-grid">
+                    <div class="filter-group">
+                        <label for="filterProxy">Proxy Closure Handling</label>
+                        <select id="filterProxy" onchange="applyFilters()">
+                            <option value="EXCLUDE">Exclude Non-Provider Proxy Closures (Clean)</option>
+                            <option value="ALL">Include All (Raw + Non-Provider Proxy)</option>
+                            <option value="ONLY_PROXY">Only Non-Provider Proxy Closures</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterMonth">Month</label>
+                        <select id="filterMonth" onchange="applyFilters()">
+                            <option value="ALL">All Months</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterLocation">Location</label>
+                        <select id="filterLocation" onchange="applyFilters()">
+                            <option value="ALL">All Locations</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterSpecialty">Specialty</label>
+                        <select id="filterSpecialty" onchange="applyFilters()">
+                            <option value="ALL">All Specialties</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterProvider">Provider</label>
+                        <select id="filterProvider" onchange="applyFilters()">
+                            <option value="ALL">All Providers</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn-reset" onclick="resetFilters()">Reset All Filters</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="qa-box" id="qaSummary"></div>
+
+            <div class="grid-kpi">
+                <div class="kpi-card">
+                    <div class="kpi-label">Active Encounters</div>
+                    <div class="kpi-val" id="kpiValidCount">0</div>
+                    <div class="kpi-sub" id="kpiRawSub">From 0 total encounters</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Median Arrival → Completed</div>
+                    <div class="kpi-val" id="kpiMedianComp">0m</div>
+                    <div class="kpi-sub" id="kpiMeanComp">Corrected Mean: 0m (Raw: 0m)</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Non-Provider Closures Purged</div>
+                    <div class="kpi-val" id="kpiProxyCount">0</div>
+                    <div class="kpi-sub" id="kpiProxyPct">Closed by non-provider user</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Batch-Cleanup (>24h)</div>
+                    <div class="kpi-val" id="kpiBatchCount">0</div>
+                    <div class="kpi-sub" id="kpiBatchPct">0% of visits</div>
+                </div>
+            </div>
+
+            <div class="section-title">1. Core Wait-Time Metrics (Medians)</div>
+            <table id="metricsTable">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Definition / Stage</th>
+                        <th>Corrected Median</th>
+                        <th>P75</th>
+                        <th style="color:var(--text-muted);">Min</th>
+                        <th style="color:var(--text-muted);">Max</th>
+                        <th>Raw Median</th>
+                        <th>Corrected Mean</th>
+                        <th>Sample Size (n)</th>
+                        <th>% Included</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <div class="section-title">2. Batch-Cleanup & Data Quality Correction (§5a)</div>
+            <p style="margin-bottom: 12px; font-size: 0.88rem; color: var(--text-muted);">
+                Comparing raw vs. corrected values highlights how late timestamp entries skew overall averages.
+            </p>
+            <table id="batchTable">
+                <thead>
+                    <tr>
+                        <th>Metric Group</th>
+                        <th>Raw Median</th>
+                        <th>Corrected Median (&lt;24h)</th>
+                        <th>Raw Mean</th>
+                        <th>Corrected Mean (&lt;24h)</th>
+                        <th>Impact / Excluded Count</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <div class="section-title">3. Bottleneck Analysis (§6)</div>
+            <p style="margin-bottom: 12px; font-size: 0.88rem; color: var(--text-muted);">
+                Primary stage absorbing the largest share of pre-completion encounter duration.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <h4 style="margin-bottom:8px; color:var(--primary);">Overall Bottleneck Distribution</h4>
+                    <table id="bottleneckOverallTable">
+                        <thead>
+                            <tr><th>Bottleneck Stage</th><th>Encounter Count (n)</th><th>% Share</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div>
+                    <h4 style="margin-bottom:8px; color:var(--primary);">Long-Stay Group (Top Quartile &gt;75th Pct)</h4>
+                    <table id="bottleneckLongStayTable">
+                        <thead>
+                            <tr><th>Bottleneck Stage</th><th>Encounter Count (n)</th><th>% Share</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="section-title">4. Breakdown by Location</div>
+            <p style="color:var(--text-muted); font-size:0.85em; margin-top:-8px; margin-bottom:12px;">"n" is total visits attributed to that location (matches the Active Encounters total once summed). "Timed" is the subset used for the median columns, after also excluding batch-cleanup (&gt;24h late) records.</p>
+            <table id="locationTable">
+                <thead>
+                    <tr>
+                        <th>Location</th>
+                        <th>Total Visits (n)</th>
+                        <th>Median Arr → Comp</th>
+                        <th>Median Wait to Doctor</th>
+                        <th>Median Consult Dur</th>
+                        <th>Top Bottleneck</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <div class="section-title">5. Breakdown by Specialty</div>
+            <table id="specialtyTable">
+                <thead>
+                    <tr>
+                        <th>Specialty</th>
+                        <th>Total Visits (n)</th>
+                        <th>Median Arr → Comp</th>
+                        <th>Median Wait to Doctor</th>
+                        <th>Median Consult Dur</th>
+                        <th>Top Bottleneck</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+
+            <div class="section-title">6. Breakdown by Attending Provider (n ≥ 3)</div>
+            <table id="providerTable">
+                <thead>
+                    <tr>
+                        <th>Attending Provider</th>
+                        <th>Specialty</th>
+                        <th>Visits (n)</th>
+                        <th>Median Arr → Comp</th>
+                        <th>Median Consult Dur</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let globalProcessedData = [];
+        let globalQAStats = {};
+
+        function handleFileSelect(evt) {
+            const file = evt.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    processFlowBoardData(results.data);
+                }
+            });
+        }
+
+        function getCol(row, colName) {
+            if (!row) return '';
+            if (row[colName] !== undefined) return String(row[colName]).trim();
+            let key = Object.keys(row).find(k => k.trim() === colName);
+            return key ? String(row[key]).trim() : '';
+        }
+
+        function getMonthKey(dateStr) {
+            if (!dateStr || dateStr.trim() === '' || dateStr.toLowerCase() === 'nan') return 'Unknown';
+            let s = dateStr.trim();
+            if (s.includes('/')) {
+                let parts = s.split('/');
+                if (parts.length === 3) {
+                    let year = parts[2].length === 4 ? parts[2] : '20' + parts[2];
+                    let month = parts[1].padStart(2, '0');
+                    if (parseInt(parts[1]) > 12) {
+                        month = parts[0].padStart(2, '0');
+                    }
+                    return `${year}-${month}`;
+                }
+            }
+            if (s.includes('-')) {
+                let parts = s.split('-');
+                if (parts.length >= 2) {
+                    let year = parts[0];
+                    let month = parts[1].padStart(2, '0');
+                    return `${year}-${month}`;
+                }
+            }
+            return 'Unknown';
+        }
+
+        function parseDateTime(str, dateStr) {
+            if (!str || str.trim() === '' || str.trim().toLowerCase() === 'nan' || str.trim().toLowerCase() === 'none' || str.trim().toLowerCase() === 'undefined') return null;
+            let s = str.trim();
+            
+            if (s.includes('-') && s.includes(':')) {
+                let parts = s.split(' ');
+                if (parts.length === 2) {
+                    let dParts = parts[0].split('-');
+                    let tParts = parts[1].split(':');
+                    if (dParts.length === 3 && tParts.length >= 2) {
+                        return new Date(parseInt(dParts[0]), parseInt(dParts[1]) - 1, parseInt(dParts[2]), parseInt(tParts[0]), parseInt(tParts[1]), parseInt(tParts[2] || 0));
+                    }
+                }
+            }
+
+            if (dateStr && dateStr.trim() !== '') {
+                let ds = dateStr.trim();
+                let dParts = ds.split('/');
+                if (dParts.length === 3) {
+                    let day = parseInt(dParts[0]);
+                    let month = parseInt(dParts[1]) - 1;
+                    let year = parseInt(dParts[2]);
+                    
+                    let tParts = s.split(':');
+                    if (tParts.length >= 2) {
+                        let hours = parseInt(tParts[0]);
+                        let mins = parseInt(tParts[1]);
+                        let secs = parseInt(tParts[2] || 0);
+                        return new Date(year, month, day, hours, mins, secs);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Returns standardized Provider name string if username matches ANY known provider in dataset
+        function findMatchingProvider(username, providerSet) {
+            if (!username) return null;
+            let uNorm = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!uNorm) return null;
+
+            for (let prov of providerSet) {
+                let pNorm = prov.toLowerCase().replace(/[^a-z0-9]/g, '');
+                let pParts = prov.toLowerCase().split(/\s+/);
+                
+                let matched = pParts.some(part => part.length > 2 && uNorm.includes(part)) || 
+                              pNorm.includes(uNorm) || 
+                              uNorm.includes(pNorm);
+                              
+                if (matched) return prov;
+            }
+            return null;
+        }
+
+        function processFlowBoardData(rows) {
+            let encounters = [];
+            let current = null;
+
+            rows.forEach(r => {
+                let loc = getCol(r, 'Location');
+                if (loc !== '' && loc.toLowerCase() !== 'nan') {
+                    if (current) encounters.push(current);
+                    current = { main: r, subs: [] };
+                } else if (current) {
+                    current.subs.push(r);
+                }
+            });
+            if (current) encounters.push(current);
+
+            let totalRaw = encounters.length;
+            let droppedNoShow = 0;
+            let droppedNoEnc = 0;
+            let validEncs = [];
+
+            encounters.forEach(e => {
+                let status = getCol(e.main, 'Final Status');
+                let encNum = getCol(e.main, 'Encounter Number');
+                let stTime = getCol(e.main, 'Start Time');
+
+                if (['No show', 'Canceled', 'Canceled < 24h', 'Cancelled', 'Cancelled < 24h'].includes(status)) {
+                    droppedNoShow++;
+                    return;
+                }
+                if (!encNum || encNum.toLowerCase() === 'nan' || !stTime || stTime.toLowerCase() === 'nan') {
+                    droppedNoEnc++;
+                    return;
+                }
+
+                e.subs = e.subs.filter(s => getCol(s, 'Final Status').toLowerCase() !== 'none');
+                validEncs.push(e);
+            });
+
+            // Collect all unique providers across dataset
+            let allProvidersSet = new Set();
+            validEncs.forEach(e => {
+                let p = getCol(e.main, 'Provider');
+                if (p && p.toLowerCase() !== 'nan') {
+                    allProvidersSet.add(p);
+                }
+            });
+
+            let processed = [];
+            let nonMonotonicCount = 0;
+            let totalProxyCount = 0;
+
+            validEncs.forEach(e => {
+                let m = e.main;
+                let dateStr = getCol(m, 'Date');
+                let loc = getCol(m, 'Location');
+                let prov = getCol(m, 'Provider');
+                let spec = getCol(m, 'specialty');
+                let encNum = getCol(m, 'Encounter Number');
+                let monthKey = getMonthKey(dateStr);
+
+                let firstDT = {};
+                let firstUpd = {};
+                let stages = [];
+
+                e.subs.forEach(s => {
+                    let stName = getCol(s, 'Final Status');
+                    let stDT = parseDateTime(getCol(s, 'Start Time'), dateStr);
+                    let endDT = parseDateTime(getCol(s, 'End Time'), dateStr);
+                    let upd = getCol(s, 'Updated By');
+
+                    if (stDT) {
+                        stages.push({ status: stName, start: stDT, end: endDT, updatedBy: upd });
+                        if (!firstDT[stName]) {
+                            firstDT[stName] = stDT;
+                            firstUpd[stName] = upd;
+                        }
+                    }
+                });
+
+                let tArrived = firstDT['Arrived'];
+                let tWaitVitals = firstDT['Waiting nurse assessment'];
+                let tNurseAssess = firstDT['Nurse Assessment'];
+                let tWaitDoc = firstDT['Waiting consultation'];
+                let tInConsult = firstDT['In Consultation'];
+                let tConsultComp = firstDT['Consultation Completed'];
+                let compUser = firstUpd['Consultation Completed'] || '';
+
+                // SPECIALTY-AWARE PROVIDER ATTRIBUTION & PROXY RULE
+                let isFM = spec && (spec.toLowerCase().includes('family medicine') || spec.toLowerCase().includes('fam med') || spec.toLowerCase().includes('fm'));
+                let matchedCompProv = compUser ? findMatchingProvider(compUser, allProvidersSet) : null;
+                
+                let isProxyClosed = false;
+                let effectiveAttendingProvider = prov;
+
+                if (tConsultComp && compUser) {
+                    if (!matchedCompProv) {
+                        // Completed by non-provider (nurse, clerk, admin, front desk)
+                        isProxyClosed = true;
+                        totalProxyCount++;
+                    } else {
+                        // Completed by a doctor
+                        if (isFM) {
+                            // Family Medicine allows requeuing: Doctor on 'Consultation Completed' is the true attending doctor
+                            effectiveAttendingProvider = matchedCompProv;
+                        } else {
+                            // Other specialties: Single specialist per queue, so Provider column doctor attended
+                            effectiveAttendingProvider = prov;
+                        }
+                    }
+                }
+
+                function gapMin(start, end) {
+                    if (!start || !end) return null;
+                    let diff = (end - start) / 60000;
+                    if (diff < 0) {
+                        nonMonotonicCount++;
+                        return null;
+                    }
+                    return diff;
+                }
+
+                let isBatchCleanup = false;
+                if (tArrived && tConsultComp) {
+                    if ((tConsultComp - tArrived) / 3600000 > 24) isBatchCleanup = true;
+                }
+
+                let stageDurations = {};
+                stages.forEach(s => {
+                    if (s.start && s.end) {
+                        let endCut = tConsultComp && s.end > tConsultComp ? tConsultComp : s.end;
+                        if (endCut > s.start) {
+                            let dur = (endCut - s.start) / 60000;
+                            stageDurations[s.status] = (stageDurations[s.status] || 0) + dur;
+                        }
+                    }
+                });
+
+                let topBottleneck = 'None';
+                let maxDur = -1;
+                let totalDurPreComp = 0;
+                Object.keys(stageDurations).forEach(st => {
+                    totalDurPreComp += stageDurations[st];
+                    if (stageDurations[st] > maxDur) {
+                        maxDur = stageDurations[st];
+                        topBottleneck = st;
+                    }
+                });
+
+                processed.push({
+                    encNum, location: loc, provider: effectiveAttendingProvider, assignedProvider: prov, specialty: spec, date: dateStr, monthKey,
+                    isBatchCleanup,
+                    isProxyClosed,
+                    compUser,
+                    hasInConsult: !!tInConsult,
+                    tArrived, tInConsult, tConsultComp,
+                    timeArrived: gapMin(tArrived, tWaitVitals || tNurseAssess || tWaitDoc),
+                    qVitals: gapMin(tWaitVitals, tNurseAssess),
+                    tVitals: gapMin(tNurseAssess, tWaitDoc),
+                    vitalsFallback: (!tNurseAssess && tWaitVitals && tWaitDoc) ? gapMin(tWaitVitals, tWaitDoc) : null,
+                    waitDoc: gapMin(tWaitDoc, tInConsult),
+                    arrToInConsult: gapMin(tArrived, tInConsult),
+                    consultDur: gapMin(tInConsult, tConsultComp),
+                    arrToComp: gapMin(tArrived, tConsultComp),
+                    topBottleneck,
+                    totalDurPreComp
+                });
+            });
+
+            globalProcessedData = processed;
+            globalQAStats = { totalRaw, droppedNoShow, droppedNoEnc, nonMonotonicCount, totalProxyCount };
+
+            populateFilterDropdowns(processed);
+            applyFilters();
+        }
+
+        function populateFilterDropdowns(data) {
+            let months = new Set(), locations = new Set(), specialties = new Set(), providers = new Set();
+
+            data.forEach(d => {
+                if (d.monthKey && d.monthKey !== 'Unknown') months.add(d.monthKey);
+                if (d.location && d.location !== 'nan') locations.add(d.location);
+                if (d.specialty && d.specialty !== 'nan') specialties.add(d.specialty);
+                if (d.provider && d.provider !== 'nan') providers.add(d.provider);
+            });
+
+            fillSelect('filterMonth', Array.from(months).sort(), 'All Months');
+            fillSelect('filterLocation', Array.from(locations).sort(), 'All Locations');
+            fillSelect('filterSpecialty', Array.from(specialties).sort(), 'All Specialties');
+            fillSelect('filterProvider', Array.from(providers).sort(), 'All Providers');
+        }
+
+        function fillSelect(id, items, defaultText) {
+            let select = document.getElementById(id);
+            select.innerHTML = `<option value="ALL">${defaultText}</option>`;
+            items.forEach(item => { select.innerHTML += `<option value="${item}">${item}</option>`; });
+        }
+
+        function applyFilters() {
+            let selProxy = document.getElementById('filterProxy').value;
+            let selMonth = document.getElementById('filterMonth').value;
+            let selLoc = document.getElementById('filterLocation').value;
+            let selSpec = document.getElementById('filterSpecialty').value;
+            let selProv = document.getElementById('filterProvider').value;
+
+            let filtered = globalProcessedData.filter(d => {
+                let matchProxy = true;
+                if (selProxy === 'EXCLUDE') matchProxy = !d.isProxyClosed;
+                else if (selProxy === 'ONLY_PROXY') matchProxy = d.isProxyClosed;
+
+                return matchProxy &&
+                       (selMonth === 'ALL' || d.monthKey === selMonth) &&
+                       (selLoc === 'ALL' || d.location === selLoc) &&
+                       (selSpec === 'ALL' || d.specialty === selSpec) &&
+                       (selProv === 'ALL' || d.provider === selProv);
+            });
+
+            renderDashboard(filtered);
+        }
+
+        function resetFilters() {
+            document.getElementById('filterProxy').value = 'EXCLUDE';
+            document.getElementById('filterMonth').value = 'ALL';
+            document.getElementById('filterLocation').value = 'ALL';
+            document.getElementById('filterSpecialty').value = 'ALL';
+            document.getElementById('filterProvider').value = 'ALL';
+            applyFilters();
+        }
+
+        function getMedian(arr) {
+            let valid = arr.filter(v => v !== null && !isNaN(v)).sort((a,b) => a-b);
+            if (valid.length === 0) return null;
+            let mid = Math.floor(valid.length / 2);
+            return valid.length % 2 !== 0 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+        }
+
+        function getMean(arr) {
+            let valid = arr.filter(v => v !== null && !isNaN(v));
+            if (valid.length === 0) return null;
+            return valid.reduce((a,b) => a+b, 0) / valid.length;
+        }
+
+        // Adds P75/Min/Max alongside the existing median/mean. Returns null
+        // fields gracefully when there's no valid data (n=0).
+        function getStats(arr) {
+            let valid = arr.filter(v => v !== null && !isNaN(v)).sort((a,b) => a-b);
+            let n = valid.length;
+            if (n === 0) return { median: null, p75: null, min: null, max: null, mean: null, n: 0 };
+            let mid = Math.floor(n / 2);
+            let median = n % 2 !== 0 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+            let idx75 = 0.75 * (n - 1);
+            let lo = Math.floor(idx75), hi = Math.min(lo + 1, n - 1), frac = idx75 - lo;
+            let p75 = valid[lo] + (valid[hi] - valid[lo]) * frac;
+            let mean = valid.reduce((a,b) => a+b, 0) / n;
+            return { median, p75, min: valid[0], max: valid[n-1], mean, n };
+        }
+
+        function fmt(num) { return num !== null ? num.toFixed(1) + 'm' : 'N/A'; }
+
+        function renderDashboard(data) {
+            document.getElementById('dashboard').style.display = 'block';
+
+            let { totalRaw, droppedNoShow, droppedNoEnc, nonMonotonicCount, totalProxyCount } = globalQAStats;
+            let validN = data.length;
+            let batchData = data.filter(d => !d.isBatchCleanup);
+            let batchCount = data.filter(d => d.isBatchCleanup).length;
+            let selProxyMode = document.getElementById('filterProxy').value;
+
+            document.getElementById('qaSummary').innerHTML = `
+                <strong>Data Processing & QA Summary:</strong> Processed <strong>${totalRaw}</strong> total dataset encounters. 
+                Currently displaying <strong>${validN}</strong> active encounters. 
+                Identified <strong>${totalProxyCount}</strong> non-provider proxy closures. 
+                ${selProxyMode === 'EXCLUDE' ? '<strong>Non-provider proxy closures are EXCLUDED. Family Medicine visits requeued to attending doctors are accurately re-attributed and INCLUDED.</strong>' : ''}
+                Flagged <strong>${batchCount}</strong> visits as >24h batch-cleanup records.
+            `;
+
+            document.getElementById('kpiValidCount').innerText = validN;
+            document.getElementById('kpiRawSub').innerText = `From ${globalProcessedData.length} valid encounters`;
+
+            let compStats = getStats(batchData.map(d => d.arrToComp));
+            let medCompCorr = compStats.median;
+            let meanCompCorr = compStats.mean;
+            let meanCompRaw = getMean(data.map(d => d.arrToComp));
+
+            document.getElementById('kpiMedianComp').innerText = fmt(medCompCorr);
+            document.getElementById('kpiMeanComp').innerHTML = `Mean: ${fmt(meanCompCorr)} (Raw: ${fmt(meanCompRaw)}) &middot; P75: ${fmt(compStats.p75)} &middot; Range: ${fmt(compStats.min)}&ndash;${fmt(compStats.max)}`;
+
+            document.getElementById('kpiProxyCount').innerText = totalProxyCount;
+            document.getElementById('kpiProxyPct').innerText = globalProcessedData.length > 0 ? ((totalProxyCount/globalProcessedData.length)*100).toFixed(1) + '% of all visits' : '0%';
+
+            document.getElementById('kpiBatchCount').innerText = batchCount;
+            document.getElementById('kpiBatchPct').innerText = validN > 0 ? ((batchCount/validN)*100).toFixed(1) + '% of active visits' : '0%';
+
+            let metricsDef = [
+                { key: 'timeArrived', name: 'Time on "Arrived"', def: 'Arrived start → Next status start' },
+                { key: 'qVitals', name: 'Queue for vitals', def: 'Waiting nurse assessment → Nurse Assessment start' },
+                { key: 'tVitals', name: 'Time on vitals', def: 'Nurse Assessment start → Waiting consultation start' },
+                { key: 'vitalsFallback', name: 'Vitals+queue fallback', def: 'Waiting nurse assessment → Waiting consultation (if nurse step skipped)' },
+                { key: 'waitDoc', name: 'Wait to see doctor', def: 'Waiting consultation start → In Consultation start' },
+                { key: 'arrToInConsult', name: 'Arrival → In Consultation', def: 'Arrived start → In Consultation start' },
+                { key: 'consultDur', name: 'Consultation duration', def: 'In Consultation start → Consultation Completed' },
+                { key: 'arrToComp', name: 'Arrival → Consultation Completed', def: 'Arrived start → Consultation Completed start' }
+            ];
+
+            let mBody = document.querySelector('#metricsTable tbody');
+            mBody.innerHTML = '';
+            metricsDef.forEach(m => {
+                let corrVals = batchData.map(d => d[m.key]);
+                let rawVals = data.map(d => d[m.key]);
+
+                let s = getStats(corrVals);
+                let rawMed = getMedian(rawVals);
+                let pct = batchData.length > 0 ? ((s.n / batchData.length) * 100).toFixed(1) + '%' : '0%';
+
+                mBody.innerHTML += `
+                    <tr>
+                        <td><strong>${m.name}</strong></td>
+                        <td style="color:var(--text-muted);">${m.def}</td>
+                        <td><strong>${fmt(s.median)}</strong></td>
+                        <td><strong>${fmt(s.p75)}</strong></td>
+                        <td style="color:var(--text-muted);">${fmt(s.min)}</td>
+                        <td style="color:var(--text-muted);">${fmt(s.max)}</td>
+                        <td>${fmt(rawMed)}</td>
+                        <td>${fmt(s.mean)}</td>
+                        <td>n=${s.n}</td>
+                        <td>${pct}</td>
+                    </tr>
+                `;
+            });
+
+            let bBody = document.querySelector('#batchTable tbody');
+            bBody.innerHTML = `
+                <tr>
+                    <td><strong>Arrival → Consultation Completed</strong></td>
+                    <td>${fmt(getMedian(data.map(d => d.arrToComp)))}</td>
+                    <td><strong style="color:var(--success);">${fmt(medCompCorr)}</strong></td>
+                    <td style="color:var(--danger);">${fmt(meanCompRaw)}</td>
+                    <td><strong>${fmt(meanCompCorr)}</strong></td>
+                    <td>Excluded ${batchCount} visits (>24h delayed completions)</td>
+                </tr>
+            `;
+
+            let bCounts = {};
+            data.forEach(d => { if (d.topBottleneck !== 'None') bCounts[d.topBottleneck] = (bCounts[d.topBottleneck] || 0) + 1; });
+
+            let bOverallBody = document.querySelector('#bottleneckOverallTable tbody');
+            bOverallBody.innerHTML = '';
+            Object.keys(bCounts).sort((a,b) => bCounts[b] - bCounts[a]).forEach(st => {
+                let cnt = bCounts[st];
+                bOverallBody.innerHTML += `<tr><td>${st}</td><td>${cnt}</td><td>${validN > 0 ? ((cnt/validN)*100).toFixed(1) : 0}%</td></tr>`;
+            });
+
+            let sortedDurs = batchData.map(d => d.totalDurPreComp).sort((a,b) => a-b);
+            let q75 = sortedDurs[Math.floor(sortedDurs.length * 0.75)] || 0;
+            let longStayData = batchData.filter(d => d.totalDurPreComp >= q75);
+            let lsCounts = {};
+            longStayData.forEach(d => { if (d.topBottleneck !== 'None') lsCounts[d.topBottleneck] = (lsCounts[d.topBottleneck] || 0) + 1; });
+
+            let bLSBody = document.querySelector('#bottleneckLongStayTable tbody');
+            bLSBody.innerHTML = '';
+            Object.keys(lsCounts).sort((a,b) => lsCounts[b] - lsCounts[a]).forEach(st => {
+                let cnt = lsCounts[st];
+                bLSBody.innerHTML += `<tr><td>${st}</td><td>${cnt}</td><td>${longStayData.length > 0 ? ((cnt/longStayData.length)*100).toFixed(1) : 0}%</td></tr>`;
+            });
+
+            let locGroup = {};
+            data.forEach(d => {
+                if (!locGroup[d.location]) locGroup[d.location] = [];
+                locGroup[d.location].push(d);
+            });
+            let locBody = document.querySelector('#locationTable tbody');
+            locBody.innerHTML = '';
+            Object.keys(locGroup).forEach(loc => {
+                let arr = locGroup[loc];
+                let clean = arr.filter(d => !d.isBatchCleanup);
+                let bMap = {};
+                arr.forEach(a => { if (a.topBottleneck !== 'None') bMap[a.topBottleneck] = (bMap[a.topBottleneck] || 0) + 1; });
+                let topB = Object.keys(bMap).sort((a,b) => bMap[b] - bMap[a])[0] || 'N/A';
+
+                locBody.innerHTML += `
+                    <tr>
+                        <td><strong>${loc}</strong></td>
+                        <td>n=${arr.length} <span style="color:var(--text-muted); font-size:0.85em;">(${clean.length} timed)</span></td>
+                        <td>${fmt(getMedian(clean.map(d => d.arrToComp)))}</td>
+                        <td>${fmt(getMedian(clean.map(d => d.waitDoc)))}</td>
+                        <td>${fmt(getMedian(clean.map(d => d.consultDur)))}</td>
+                        <td><span class="badge badge-info">${topB}</span></td>
+                    </tr>
+                `;
+            });
+
+            let specGroup = {};
+            data.forEach(d => {
+                if (!specGroup[d.specialty]) specGroup[d.specialty] = [];
+                specGroup[d.specialty].push(d);
+            });
+            let specBody = document.querySelector('#specialtyTable tbody');
+            specBody.innerHTML = '';
+            Object.keys(specGroup).sort((a,b) => specGroup[b].length - specGroup[a].length).forEach(spec => {
+                let arr = specGroup[spec];
+                let clean = arr.filter(d => !d.isBatchCleanup);
+                let bMap = {};
+                arr.forEach(a => { if (a.topBottleneck !== 'None') bMap[a.topBottleneck] = (bMap[a.topBottleneck] || 0) + 1; });
+                let topB = Object.keys(bMap).sort((a,b) => bMap[b] - bMap[a])[0] || 'N/A';
+
+                specBody.innerHTML += `
+                    <tr>
+                        <td><strong>${spec}</strong></td>
+                        <td>n=${arr.length} <span style="color:var(--text-muted); font-size:0.85em;">(${clean.length} timed)</span></td>
+                        <td>${fmt(getMedian(clean.map(d => d.arrToComp)))}</td>
+                        <td>${fmt(getMedian(clean.map(d => d.waitDoc)))}</td>
+                        <td>${fmt(getMedian(clean.map(d => d.consultDur)))}</td>
+                        <td><span class="badge badge-info">${topB}</span></td>
+                    </tr>
+                `;
+            });
+
+            let provGroup = {};
+            data.forEach(d => {
+                if (!provGroup[d.provider]) provGroup[d.provider] = [];
+                provGroup[d.provider].push(d);
+            });
+            let provBody = document.querySelector('#providerTable tbody');
+            provBody.innerHTML = '';
+            Object.keys(provGroup).sort((a,b) => provGroup[b].length - provGroup[a].length).forEach(prov => {
+                let arr = provGroup[prov];
+                let spec = arr[0].specialty;
+                let n = arr.length;
+                let clean = arr.filter(d => !d.isBatchCleanup);
+                let isLowN = clean.length < 3;
+                let badge = isLowN ? '<span class="badge badge-warn">Low n (&lt;3)</span>' : '<span class="badge badge-info">Reliable</span>';
+
+                provBody.innerHTML += `
+                    <tr>
+                        <td><strong>${prov}</strong></td>
+                        <td>${spec}</td>
+                        <td>n=${n} <span style="color:var(--text-muted); font-size:0.85em;">(${clean.length} timed)</span></td>
+                        <td>${fmt(getMedian(clean.map(d => d.arrToComp)))}</td>
+                        <td>${fmt(getMedian(clean.map(d => d.consultDur)))}</td>
+                        <td>${badge}</td>
+                    </tr>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
