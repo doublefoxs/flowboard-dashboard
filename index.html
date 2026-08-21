@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Opeyemi's FlowBoard Analytic Machine</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <style>
         :root {
             --primary: #1e3a8a;
@@ -97,6 +98,17 @@
         .kpi-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
 
         .section-title { font-size: 1.2rem; font-weight: 700; color: var(--primary); margin: 28px 0 12px; border-left: 4px solid var(--primary-light); padding-left: 10px; }
+
+        .chart-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 8px; }
+        .chart-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        .chart-card h4 { font-size: 0.95rem; color: var(--text); margin-bottom: 4px; }
+        .chart-card .chart-sub { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px; }
+        .chart-canvas-wrap { position: relative; height: 280px; }
+        .chart-stat-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.82rem; }
+        .chart-stat-table th { text-align: right; color: var(--text-muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .chart-stat-table th:first-child, .chart-stat-table td:first-child { text-align: left; }
+        .chart-stat-table td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+        .chart-stat-table td.muted { color: var(--text-muted); }
 
         table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 24px; font-size: 0.88rem; }
         th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
@@ -300,6 +312,38 @@
                 </thead>
                 <tbody></tbody>
             </table>
+
+            <div class="section-title">7. Arrival &rarr; Completed: Time Patterns</div>
+            <p style="color:var(--text-muted); font-size:0.85em; margin-top:-8px; margin-bottom:12px;">Batch-cleanup (&gt;24h late) records excluded throughout, same as the KPI/median figures above. Bars show the median; hover for exact values.</p>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h4>By Day of Week</h4>
+                    <div class="chart-sub">Which weekdays run longest, arrival to completion</div>
+                    <div class="chart-canvas-wrap"><canvas id="dowChart"></canvas></div>
+                    <table class="chart-stat-table" id="dowStatTable">
+                        <thead><tr><th style="text-align:left;">Day</th><th>N</th><th>Median</th><th>P75</th><th>Min</th><th>Max</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="chart-card">
+                    <h4>By Hour of Arrival</h4>
+                    <div class="chart-sub">Does arriving earlier or later in the day change how long it takes?</div>
+                    <div class="chart-canvas-wrap"><canvas id="hourChart"></canvas></div>
+                    <table class="chart-stat-table" id="hourStatTable">
+                        <thead><tr><th style="text-align:left;">Hour</th><th>N</th><th>Median</th><th>P75</th><th>Min</th><th>Max</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="chart-card">
+                    <h4>By Month</h4>
+                    <div class="chart-sub">Trend across the months present in this export</div>
+                    <div class="chart-canvas-wrap"><canvas id="monthChart"></canvas></div>
+                    <table class="chart-stat-table" id="monthStatTable">
+                        <thead><tr><th style="text-align:left;">Month</th><th>N</th><th>Median</th><th>P75</th><th>Min</th><th>Max</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -664,6 +708,100 @@
 
         function fmt(num) { return num !== null ? num.toFixed(1) + 'm' : 'N/A'; }
 
+        let dowChartInstance = null, hourChartInstance = null, monthChartInstance = null;
+        const DOW_ORDER = [1,2,3,4,5,6,0];
+        const DOW_LABELS = { 1:'Mon', 2:'Tue', 3:'Wed', 4:'Thu', 5:'Fri', 6:'Sat', 0:'Sun' };
+
+        function renderTimePatterns(batchData) {
+            // ---- Day of week ----
+            let dowGroups = {};
+            batchData.forEach(d => {
+                if (!d.tArrived || d.arrToComp === null) return;
+                let dow = d.tArrived.getDay();
+                (dowGroups[dow] = dowGroups[dow] || []).push(d.arrToComp);
+            });
+            let dowKeys = DOW_ORDER.filter(k => dowGroups[k] && dowGroups[k].length);
+            let dowStats = dowKeys.map(k => getStats(dowGroups[k]));
+            drawTimeChart('dowChart', 'dowChartInstance', dowKeys.map(k => DOW_LABELS[k]), dowStats, '#1e3a8a');
+            fillStatTable('dowStatTable', dowKeys.map(k => DOW_LABELS[k]), dowStats);
+
+            // ---- Hour of day ----
+            let hourGroups = {};
+            batchData.forEach(d => {
+                if (!d.tArrived || d.arrToComp === null) return;
+                let h = d.tArrived.getHours();
+                (hourGroups[h] = hourGroups[h] || []).push(d.arrToComp);
+            });
+            let hourKeys = Object.keys(hourGroups).map(Number).sort((a,b) => a-b);
+            let hourStats = hourKeys.map(h => getStats(hourGroups[h]));
+            drawTimeChart('hourChart', 'hourChartInstance', hourKeys.map(h => `${h}:00`), hourStats, '#0284c7');
+            fillStatTable('hourStatTable', hourKeys.map(h => `${h}:00`), hourStats);
+
+            // ---- Month ----
+            let monthGroups = {};
+            batchData.forEach(d => {
+                if (!d.monthKey || d.monthKey === 'Unknown' || d.arrToComp === null) return;
+                (monthGroups[d.monthKey] = monthGroups[d.monthKey] || []).push(d.arrToComp);
+            });
+            let monthKeys = Object.keys(monthGroups).sort();
+            let monthStats = monthKeys.map(k => getStats(monthGroups[k]));
+            drawTimeChart('monthChart', 'monthChartInstance', monthKeys, monthStats, '#10b981');
+            fillStatTable('monthStatTable', monthKeys, monthStats);
+        }
+
+        function drawTimeChart(canvasId, instanceVarName, labels, statsArr, color) {
+            if (window[instanceVarName]) { window[instanceVarName].destroy(); }
+            let ctx = document.getElementById(canvasId);
+            window[instanceVarName] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Median minutes (Arrival \u2192 Completed)',
+                        data: statsArr.map(s => s.median),
+                        backgroundColor: color,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: (ctx) => {
+                                    let s = statsArr[ctx.dataIndex];
+                                    return [`P75: ${fmt(s.p75)}`, `Min: ${fmt(s.min)}`, `Max: ${fmt(s.max)}`, `n=${s.n}`];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Median minutes' } }
+                    }
+                }
+            });
+        }
+
+        function fillStatTable(tableId, labels, statsArr) {
+            let tbody = document.querySelector(`#${tableId} tbody`);
+            tbody.innerHTML = '';
+            labels.forEach((lbl, i) => {
+                let s = statsArr[i];
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${lbl}</td>
+                        <td>${s.n}</td>
+                        <td><strong>${fmt(s.median)}</strong></td>
+                        <td>${fmt(s.p75)}</td>
+                        <td class="muted">${fmt(s.min)}</td>
+                        <td class="muted">${fmt(s.max)}</td>
+                    </tr>
+                `;
+            });
+        }
+
         function renderDashboard(data) {
             document.getElementById('dashboard').style.display = 'block';
 
@@ -848,6 +986,8 @@
                     </tr>
                 `;
             });
+
+            renderTimePatterns(batchData);
         }
     </script>
 </body>
